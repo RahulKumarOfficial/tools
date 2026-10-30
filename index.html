@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website Change Monitor</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+    font-family:Arial,sans-serif;
+    background:#f4f6fb;
+    color:#1e293b;
+}
+
+header{
+    background:#111827;
+    color:white;
+    padding:20px;
+}
+
+header h2{font-size:22px}
+header p{color:#cbd5e1;margin-top:6px}
+
+.container{
+    max-width:1100px;
+    margin:25px auto;
+    padding:0 15px;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:15px;
+    margin-bottom:20px;
+}
+
+.card{
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 2px 10px #00000008;
+}
+
+.card h3{
+    font-size:13px;
+    color:#64748b;
+}
+
+.card strong{
+    display:block;
+    font-size:27px;
+    margin-top:10px;
+}
+
+.panel{
+    background:white;
+    padding:22px;
+    border-radius:12px;
+    margin-bottom:20px;
+}
+
+.panel h3{margin-bottom:15px}
+
+input,select{
+    width:100%;
+    padding:12px;
+    border:1px solid #dbe1eb;
+    border-radius:7px;
+    margin:7px 0 12px;
+    font-size:15px;
+    background:white;
+}
+
+button{
+    padding:11px 17px;
+    border:0;
+    border-radius:7px;
+    cursor:pointer;
+    font-weight:bold;
+    margin:4px 3px 4px 0;
+}
+
+.primary{background:#4f46e5;color:white}
+.success{background:#16a34a;color:white}
+.danger{background:#dc2626;color:white}
+.secondary{background:#e2e8f0;color:#334155}
+
+.website{
+    border:1px solid #e2e8f0;
+    padding:16px;
+    border-radius:10px;
+    margin-top:12px;
+}
+
+.website-top{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.status{
+    font-size:12px;
+    font-weight:bold;
+    padding:6px 10px;
+    border-radius:20px;
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.changed{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+small{
+    display:block;
+    color:#64748b;
+    margin-top:8px;
+}
+
+.history-item{
+    padding:12px;
+    border-bottom:1px solid #eee;
+    font-size:14px;
+}
+
+pre{
+    white-space:pre-wrap;
+    overflow-wrap:anywhere;
+    background:#f1f5f9;
+    padding:12px;
+    border-radius:7px;
+    margin-top:10px;
+    max-height:180px;
+    overflow:auto;
+    font-size:12px;
+}
+
+#alertBox{
+    display:none;
+    position:fixed;
+    top:15px;
+    right:15px;
+    left:15px;
+    max-width:450px;
+    margin:auto;
+    background:#dc2626;
+    color:white;
+    padding:18px;
+    border-radius:10px;
+    z-index:100;
+    box-shadow:0 5px 25px #0003;
+}
+
+@media(max-width:600px){
+    .stats{grid-template-columns:1fr}
+    .container{margin-top:15px}
+    .panel{padding:16px}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h2>🔔 Website Change Monitor</h2>
+    <p>Monitor website changes and get instant alerts.</p>
+</header>
+
+<div class="container">
+
+<div class="stats">
+    <div class="card">
+        <h3>Total Websites</h3>
+        <strong id="total">0</strong>
+    </div>
+
+    <div class="card">
+        <h3>Changes Detected</h3>
+        <strong id="changes">0</strong>
+    </div>
+
+    <div class="card">
+        <h3>Monitoring Status</h3>
+        <strong id="monitorStatus">Stopped</strong>
+    </div>
+</div>
+
+<div class="panel">
+    <h3>➕ Add Website</h3>
+
+    <label>Website URL</label>
+    <input type="url" id="url" placeholder="https://example.com">
+
+    <label>Check Interval</label>
+    <select id="interval">
+        <option value="10">10 Seconds</option>
+        <option value="30">30 Seconds</option>
+        <option value="60" selected>1 Minute</option>
+        <option value="300">5 Minutes</option>
+        <option value="600">10 Minutes</option>
+    </select>
+
+    <button class="primary" onclick="addWebsite()">Add Website</button>
+    <button class="success" onclick="startMonitor()">▶ Start Monitoring</button>
+    <button class="danger" onclick="stopMonitor()">■ Stop</button>
+    <button class="secondary" onclick="enableSound()">🔊 Enable Sound</button>
+</div>
+
+<div class="panel">
+    <h3>🌐 Monitored Websites</h3>
+    <div id="websiteList">
+        <p>No websites added yet.</p>
+    </div>
+</div>
+
+<div class="panel">
+    <h3>📋 Change History</h3>
+    <div id="history">
+        <p>No changes detected.</p>
+    </div>
+    <button class="danger" onclick="clearHistory()">Clear History</button>
+</div>
+
+</div>
+
+<div id="alertBox">
+    <h3>🔔 WEBSITE CHANGED!</h3>
+    <p id="alertMessage"></p>
+    <button class="secondary" onclick="closeAlert()">Close</button>
+</div>
+
+<script>
+
+let websites = JSON.parse(localStorage.getItem("monitorWebsites") || "[]");
+let historyData = JSON.parse(localStorage.getItem("monitorHistory") || "[]");
+
+let timer = null;
+let soundEnabled = false;
+let audioContext = null;
+let checking = false;
+
+function save(){
+    localStorage.setItem("monitorWebsites",JSON.stringify(websites));
+    localStorage.setItem("monitorHistory",JSON.stringify(historyData));
+}
+
+function enableSound(){
+    try{
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContext.resume();
+        soundEnabled = true;
+        alert("Sound enabled!");
+    }catch(e){
+        alert("Sound not supported.");
+    }
+}
+
+function ring(){
+    if(!soundEnabled || !audioContext)return;
+
+    for(let i=0;i<3;i++){
+        let osc=audioContext.createOscillator();
+        let gain=audioContext.createGain();
+
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+
+        osc.frequency.value=850;
+        gain.gain.value=0.15;
+
+        let start=audioContext.currentTime+i*0.35;
+
+        osc.start(start);
+        osc.stop(start+0.2);
+    }
+}
+
+function addWebsite(){
+
+    let url=document.getElementById("url").value.trim();
+    let interval=Number(document.getElementById("interval").value);
+
+    if(!url){
+        alert("Enter website URL");
+        return;
+    }
+
+    try{
+        let parsed=new URL(url);
+        if(!["http:","https:"].includes(parsed.protocol)){
+            throw new Error();
+        }
+        url=parsed.href;
+    }catch(e){
+        alert("Enter a valid HTTP or HTTPS URL");
+        return;
+    }
+
+    if(websites.some(w=>w.url===url)){
+        alert("Website already exists");
+        return;
+    }
+
+    websites.push({
+        id:Date.now(),
+        url:url,
+        interval:interval,
+        content:"",
+        lastCheck:null,
+        status:"Waiting",
+        error:""
+    });
+
+    save();
+    render();
+    document.getElementById("url").value="";
+}
+
+function removeWebsite(id){
+    if(!confirm("Remove this website?"))return;
+
+    websites=websites.filter(w=>w.id!==id);
+    save();
+    render();
+}
+
+function updateInterval(id,value){
+    let w=websites.find(x=>x.id===id);
+    if(!w)return;
+
+    w.interval=Number(value);
+    save();
+
+    if(timer)startMonitor();
+}
+
+function render(){
+
+    document.getElementById("total").innerText=websites.length;
+    document.getElementById("changes").innerText=
+        historyData.length;
+
+    document.getElementById("monitorStatus").innerText=
+        timer?"Running":"Stopped";
+
+    let list=document.getElementById("websiteList");
+
+    if(!websites.length){
+        list.innerHTML="<p>No websites added yet.</p>";
+    }else{
+        list.innerHTML=websites.map(w=>`
+
+        <div class="website">
+
+            <div class="website-top">
+                <strong>${escapeHTML(w.url)}</strong>
+
+                <span class="status ${
+                    w.status==="Changed" || w.status==="Error"
+                    ?"changed":""
+                }">
+                    ${escapeHTML(w.status)}
+                </span>
+            </div>
+
+            <small>Last Check: ${
+                w.lastCheck ? new Date(w.lastCheck).toLocaleString():"Not checked"
+            }</small>
+
+            <small>${escapeHTML(w.error || "")}</small>
+
+            <label>Check Interval</label>
+
+            <select onchange="updateInterval(${w.id},this.value)">
+                <option value="10" ${w.interval===10?"selected":""}>10 Seconds</option>
+                <option value="30" ${w.interval===30?"selected":""}>30 Seconds</option>
+                <option value="60" ${w.interval===60?"selected":""}>1 Minute</option>
+                <option value="300" ${w.interval===300?"selected":""}>5 Minutes</option>
+                <option value="600" ${w.interval===600?"selected":""}>10 Minutes</option>
+            </select>
+
+            <button class="danger" onclick="removeWebsite(${w.id})">
+                Remove
+            </button>
+
+            <button class="secondary" onclick="checkWebsite(${w.id})">
+                Check Now
+            </button>
+
+        </div>
+
+        `).join("");
+    }
+
+    let history=document.getElementById("history");
+
+    if(!historyData.length){
+        history.innerHTML="<p>No changes detected.</p>";
+    }else{
+        history.innerHTML=historyData.slice(0,50).map(h=>`
+            <div class="history-item">
+                <strong>🔔 Website Changed</strong>
+                <p>${escapeHTML(h.url)}</p>
+                <small>${new Date(h.date).toLocaleString()}</small>
+                <pre>OLD: ${escapeHTML(h.oldText)}</pre>
+                <pre>NEW: ${escapeHTML(h.newText)}</pre>
+            </div>
+        `).join("");
+    }
+}
+
+function escapeHTML(value){
+    return String(value).replace(/[&<>"']/g,c=>({
+        "&":"&amp;",
+        "<":"&lt;",
+        ">":"&gt;",
+        '"':"&quot;",
+        "'":"&#39;"
+    })[c]);
+}
+
+function showAlert(message){
+    document.getElementById("alertMessage").innerText=message;
+    document.getElementById("alertBox").style.display="block";
+    ring();
+}
+
+function closeAlert(){
+    document.getElementById("alertBox").style.display="none";
+}
+
+// This method works only if the target website allows
+// cross-origin requests through CORS.
+
+async function checkWebsite(id){
+
+    let w=websites.find(x=>x.id===id);
+    if(!w)return;
+
+    w.status="Checking";
+    w.error="";
+    render();
+
+    try{
+
+        let response=await fetch(w.url,{
+            method:"GET",
+            cache:"no-store",
+            signal:AbortSignal.timeout(15000)
+        });
+
+        if(!response.ok){
+            throw new Error("HTTP "+response.status);
+        }
+
+        let html=await response.text();
+
+        let doc=new DOMParser().parseFromString(html,"text/html");
+
+        doc.querySelectorAll("script,style,noscript").forEach(el=>el.remove());
+
+        let content=(doc.body?.innerText || doc.documentElement.innerText)
+            .replace(/\s+/g," ")
+            .trim();
+
+        if(!content)throw new Error("No readable page content");
+
+        if(w.content && w.content!==content){
+
+            let oldText=w.content;
+            let newText=content;
+
+            historyData.unshift({
+                url:w.url,
+                date:new Date().toISOString(),
+                oldText:oldText.slice(0,1500),
+                newText:newText.slice(0,1500)
+            });
+
+            historyData=historyData.slice(0,50);
+
+            w.status="Changed";
+
+            showAlert("Changes detected on "+w.url);
+
+        }else{
+            w.status="No Change";
+        }
+
+        w.content=content;
+        w.lastCheck=new Date().toISOString();
+        w.error="";
+
+    }catch(error){
+
+        w.status="Error";
+        w.error=error.name==="AbortError" || error.name==="TimeoutError"
+            ?"Request timed out"
+            :error.message.includes("Failed to fetch")
+            ?"CORS restriction or network error"
+            :error.message;
+
+    }
+
+    save();
+    render();
+}
+
+async function checkAll(){
+
+    if(checking)return;
+    checking=true;
+
+    try{
+        let now=Date.now();
+
+        for(let w of websites){
+
+            if(!w.lastCheck ||
+                now-new Date(w.lastCheck).getTime()>=w.interval*1000){
+
+                await checkWebsite(w.id);
+            }
+        }
+
+    }finally{
+        checking=false;
+    }
+}
+
+function startMonitor(){
+
+    if(timer)clearInterval(timer);
+
+    if(!websites.length){
+        alert("Add a website first!");
+        return;
+    }
+
+    if(!soundEnabled){
+        alert("Click Enable Sound first for sound alerts.");
+    }
+
+    checkAll();
+
+    timer=setInterval(checkAll,5000);
+
+    render();
+}
+
+function stopMonitor(){
+
+    clearInterval(timer);
+    timer=null;
+    render();
+}
+
+function clearHistory(){
+
+    if(!confirm("Delete all history?"))return;
+
+    historyData=[];
+    save();
+    render();
+}
+
+render();
+
+</script>
+
+</body>
+</html>
